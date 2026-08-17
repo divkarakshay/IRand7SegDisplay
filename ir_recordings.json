@@ -1,0 +1,79 @@
+[
+  {
+    "label": "test_vol",
+    "type": 3,
+    "typeName": "NEC",
+    "value": "0x00CF8976",
+    "bits": 32
+  },
+  {
+    "label": "code1",
+    "type": 3,
+    "typeName": "NEC",
+    "value": "0x00CF8976",
+    "bits": 32
+  },
+  {
+    "label": "code2",
+    "type": 3,
+    "typeName": "NEC",
+    "value": "0x00CFD12E",
+    "bits": 32
+  },
+  {
+    "label": "code3",
+    "type": 3,
+    "typeName": "NEC",
+    "value": "0x00CF09F6",
+    "bits": 32
+  },
+  {
+    "label": "code4",
+    "type": 3,
+    "typeName": "NEC",
+    "value": "0x00CF51AE",
+    "bits": 32
+  },
+  {
+    "label": "code5",
+    "type": 3,
+    "typeName": "NEC",
+    "value": "0x00CFC936",
+    "bits": 32
+  },
+  {
+    "label": "code6",
+    "type": 3,
+    "typeName": "NEC",
+    "value": "0x00CF11EE",
+    "bits": 32
+  },
+  {
+    "label": "code7",
+    "type": 3,
+    "typeName": "NEC",
+    "value": "0x00CFF10E",
+    "bits": 32
+  },
+  {
+    "label": "code8",
+    "type": 3,
+    "typeName": "NEC",
+    "value": "0x00CF6996",
+    "bits": 32
+  },
+  {
+    "label": "code9",
+    "type": 3,
+    "typeName": "NEC",
+    "value": "0x00CFE916",
+    "bits": 32
+  },
+  {
+    "label": "code10",
+    "type": 3,
+    "typeName": "NEC",
+    "value": "0x00CF718E",
+    "bits": 32
+  }
+]
