@@ -110,11 +110,73 @@ bool FD650B::setDisplay(bool on, uint8_t brightness) {
 bool FD650B::ping() { return setDisplay(true, 4); }
 
 void FD650B::setDigit(uint8_t index, uint8_t segs) {
+  _scrolling = false;              // any explicit write takes over the display
+  rawSetDigit(index, segs);
+}
+
+void FD650B::rawSetDigit(uint8_t index, uint8_t segs) {
   if (index > 3) return;
   start();
   writeByte(DIG_ADDR[index]);
   writeByte(segs);
   stop();
+}
+
+// Column decomposition for smooth scrolling. Each 7-seg cell is 3 columns:
+//   L = left verticals  {F,E}          -> bit5|bit4 = 0x30
+//   M = horizontals     {A,G,D} (+DP)  -> bit0|bit6|bit3|bit7 = 0xC9
+//   R = right verticals {B,C}          -> bit1|bit2 = 0x06
+// A window of 9 columns (= 3 cells) slides over the canvas one column per
+// frame, so characters enter/leave the display at 1/3-char granularity.
+#define COL_L 0x30
+#define COL_M 0xC9
+#define COL_R 0x06
+#define SCROLL_PAD 3                 // one blank cell of lead-in/lead-out
+
+void FD650B::scrollText(const char* text, uint32_t stepMs) {
+  if (text == nullptr || text[0] == 0) return;
+  _scrollStepMs = (stepMs < 10) ? 10 : stepMs;
+  size_t len = strlen(text);
+  if (len <= 3) {                    // fits the display: no scrolling needed
+    _scrolling = false;
+    showText(text);
+    return;
+  }
+  if (len > 28) len = 28;            // canvas cap (3*28 + 6 = 90)
+  _scrolling = false;
+  int n = 0;
+  for (int i = 0; i < SCROLL_PAD; i++) _canvas[n++] = 0;
+  for (size_t i = 0; i < len; i++) {
+    uint8_t s = charToSeg(text[i]);
+    _canvas[n++] = s & COL_L;
+    _canvas[n++] = s & COL_M;
+    _canvas[n++] = s & COL_R;
+  }
+  for (int i = 0; i < SCROLL_PAD; i++) _canvas[n++] = 0;
+  _canvasLen = n;
+  _scrollPos = -9;                   // start fully off-screen (blank frame first)
+  _scrollNext = millis() + _scrollStepMs;
+  _scrolling = true;
+}
+
+bool FD650B::scrollTick() {
+  if (!_scrolling) return false;
+  if ((int32_t)(millis() - _scrollNext) < 0) return true;   // not due yet
+  _scrollNext = millis() + _scrollStepMs;
+  _scrollPos++;
+  if (_scrollPos > _canvasLen - SCROLL_PAD) {   // text fully scrolled out
+    _scrolling = false;
+    return false;
+  }
+  for (uint8_t i = 0; i < 3; i++) {
+    uint8_t seg = 0;
+    for (uint8_t k = 0; k < 3; k++) {
+      int c = _scrollPos + i * 3 + k;
+      if (c >= 0 && c < _canvasLen) seg |= _canvas[c];
+    }
+    rawSetDigit(i, seg);
+  }
+  return true;
 }
 
 void FD650B::showNumber(uint16_t value, uint8_t dpIndex) {

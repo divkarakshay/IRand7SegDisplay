@@ -132,6 +132,14 @@ Replay needs an IR LED on the panel (see §6 wiring note): `GPIO26 → 1kΩ →
 NPN base (BC547/2N2222)`, collector to IR LED (940 nm) cathode, LED anode to
 3V3, emitter to GND. The panel itself has no IR LED — only the receiver.
 
+Extra serial commands for the display:
+
+```
+FX                   # list the visual effects (and the current one)
+FX 3                 # run effect 3 (BINARY)
+TEXT HELLO WORLD     # smooth-scroll any message (up to 28 chars)
+```
+
 ## 5. Bring-up / calibration procedure
 
 1. Wire per §1. **Do not plug the panel's original connector into anything.**
@@ -147,11 +155,30 @@ NPN base (BC547/2N2222)`, collector to IR LED (940 nm) cathode, LED anode to
 4. **IR test (verified):** point the original remote at the receiver; serial
    prints `IR: type=3 val=0xA1DE... bits=32` (NEC) and the display echoes the
    last 3 hex digits. If a remote is unavailable, no output is expected.
-5. **Buttons demo (verified):** VOL+/VOL− count 0–999, CH+/CH− brightness,
-   MENU toggles display, OK resets.
+5. **Buttons demo (verified):** `VOL+`/`VOL−` cycle the visual-effects mode,
+   `CH+`/`CH−` brightness, `MENU` toggles display (or exits effects mode),
+   `OK` shows idle.
 6. **Display format:** 3 digits with decimal points (max `8.8.8.`).
    `showNumber(value, dpIndex)` lights the DP of digit `dpIndex`
    (`FD650B.cpp`). Leading zeros are not blanked.
+
+## 5c. Effects mode & smooth text scrolling
+
+`VOL+` / `VOL−` cycle through 8 non-blocking effects (`src/Effects.{h,cpp}`):
+`RIDER` (segment-bar sweeping in 1/3-char steps), `BOUNCE` ("8." ball),
+`SNAKE` (segments light clockwise per digit), `BINARY` (all 21 segments count
+in binary), `COUNT` (rolling 0–999 with moving decimal point), `BLINK`
+("8.8.8."), `PULSE` (brightness breathing), `TEXT` (scrolling demo text).
+`MENU`/`OK`, an IR code or a `SEND` command leave effects mode. Effects keep
+working with the display off / at the chosen brightness.
+
+Text longer than 3 characters scrolls smoothly with
+`FD650B::scrollText()`: each 7-seg cell is treated as 3 columns (left
+verticals / horizontals / right verticals) and a 9-column window slides in
+one-column steps, so characters enter and leave at 1/3-character granularity
+— a real marquee, no extra hardware. `scrollText()` is non-blocking: call
+`scrollTick()` from `loop()`; text ≤3 chars is shown statically instead.
+Any `setDigit()`/`show*()` call takes over the display and stops the scroll.
 
 ## 5b. Known gotchas
 
@@ -167,8 +194,9 @@ NPN base (BC547/2N2222)`, collector to IR LED (940 nm) cathode, LED anode to
 
 | File | Purpose |
 |---|---|
-| `src/FD650B.h/.cpp` | Bit-banged FD650B-S driver (display + keys), self-contained |
-| `src/main.cpp` | IR record/replay + buttons + display |
+| `src/FD650B.h/.cpp` | Bit-banged FD650B-S driver (display + keys + smooth `scrollText`), self-contained |
+| `src/Effects.h/.cpp` | Non-blocking visual-effects engine (8 effects, cycled by VOL± / serial `FX`) |
+| `src/main.cpp` | IR record/replay + buttons + display + effects wiring |
 | `tools/ir_recorder.py` | PC-side store of recordings (`ir_recordings.json`), replay driver |
 | `ir_recordings.json` | Recorded IR codes (created by `tools/ir_recorder.py`) |
 | `platformio.ini` | esp32dev / arduino framework / IRremoteESP8266 dep |

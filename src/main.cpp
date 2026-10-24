@@ -17,14 +17,17 @@
 //       IR: type=3 val=0x00CF8976 bits=32
 //   - Replay: the script sends:  SEND type=3 val=0x00CF8976 bits=32
 //
-// Panel buttons (hardware is verified): MENU toggles display, CH-/+ adjust
-// brightness, OK shows idle.
+// Panel buttons (hardware is verified): MENU toggles display (or leaves
+// effects mode), OK shows idle, CH-/+ adjust brightness, VOL-/+ cycle the
+// visual-effects mode (RIDER BOUNCE SNAKE BINARY COUNT BLINK PULSE TEXT).
+// Serial extras: FX (list), FX <n> (run effect), TEXT <message> (scroll).
 
 #include <Arduino.h>
 #include <IRrecv.h>
 #include <IRsend.h>
 #include <IRutils.h>
 #include "FD650B.h"
+#include "Effects.h"
 
 #define PIN_DIO     21
 #define PIN_CLK     22
@@ -32,6 +35,7 @@
 #define PIN_IR_TX   26
 
 FD650B disp(PIN_DIO, PIN_CLK);
+Effects fx(disp);
 IRrecv irrecv(PIN_IR);
 IRsend irsend(PIN_IR_TX);
 decode_results ir;
@@ -66,12 +70,22 @@ static void handleKey(uint8_t code) {
   }
   Serial.printf("Key! %s\n", KEY_NAMES[idx]);
   switch (idx) {
-    case 0:  dispOn = !dispOn; disp.setDisplay(dispOn, brightness); break;   // MENU
-    case 1:  disp.showText("rdy"); break;                                     // OK
-    case 2:  if (brightness > 0) brightness--; disp.setDisplay(true, brightness); break;  // CH-
-    case 3:  if (brightness < 7) brightness++; disp.setDisplay(true, brightness); break;  // CH+
-    case 4:  disp.showText("---"); break;                                     // VOL-
-    case 5:  disp.showText("---"); break;                                     // VOL+
+    case 0:                                                       // MENU
+      if (fx.running()) { fx.stop(); disp.showText("rdy"); }
+      else { dispOn = !dispOn; disp.setDisplay(dispOn, brightness); }
+      break;
+    case 1:  fx.stop(); disp.showText("rdy"); break;              // OK
+    case 2:  if (brightness > 0) brightness--;
+             fx.setBrightness(brightness);
+             disp.setDisplay(true, brightness); break;            // CH-
+    case 3:  if (brightness < 7) brightness++;
+             fx.setBrightness(brightness);
+             disp.setDisplay(true, brightness); break;            // CH+
+    case 4:  fx.prev();                                            // VOL-
+    case 5:  fx.next();                                            // VOL+
+      Serial.printf("FX %d/%d %s\n", fx.index() + 1, Effects::FX_COUNT_N,
+                    Effects::name(fx.index()));
+      break;
   }
 }
 
@@ -95,7 +109,29 @@ static void runCommand(String cmd) {
       Serial.println("SEND ERR");
     }
   } else if (cmd == "HELP") {
-    Serial.println(F("Commands: SEND type=<n> val=<0xhex> bits=<n>"));
+    Serial.println(F("Commands: SEND type=<n> val=<0xhex> bits=<n> | "
+                     "FX | FX <0..7> | TEXT <message>"));
+  } else if (cmd.startsWith("FX")) {
+    String rest = cmd.substring(2);
+    rest.trim();
+    if (!rest.length()) {
+      Serial.printf("FX: now %d (%s)\n", fx.index(), Effects::name(fx.index()));
+      for (int i = 0; i < Effects::FX_COUNT_N; i++)
+        Serial.printf("  %d %s\n", i, Effects::name(i));
+    } else {
+      fx.select(rest.toInt());
+      Serial.printf("FX: %d (%s)\n", fx.index(), Effects::name(fx.index()));
+    }
+  } else if (cmd.startsWith("TEXT")) {
+    String t = cmd.substring(4);
+    t.trim();
+    if (t.length()) {
+      fx.stop();
+      disp.scrollText(t.c_str());
+      Serial.printf("TEXT: '%s'\n", t.c_str());
+    } else {
+      Serial.println("TEXT ERR (usage: TEXT <message>)");
+    }
   } else {
     Serial.printf("Unknown: '%s' (HELP)\n", cmd.c_str());
   }
@@ -125,6 +161,7 @@ static void handleIR() {
     if (ir.repeat) Serial.print(" (rep)");
     Serial.println();
     if (!ir.repeat) {
+      fx.stop();
       disp.showHex(ir.value);
       sndUntil = millis() + 800;
     }
@@ -160,12 +197,13 @@ void loop() {
   handleKey(k);
   handleIR();
   handleSerial();
+  fx.tick();
 
   if (sndUntil && millis() > sndUntil) {
     sndUntil = 0;
     disp.showText("rdy");
   }
 
-  if (!dispOn) disp.setDisplay(false, brightness);
+  if (!dispOn && !fx.running()) disp.setDisplay(false, brightness);
   delay(20);
 }

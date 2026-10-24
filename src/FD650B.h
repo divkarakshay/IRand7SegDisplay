@@ -29,6 +29,15 @@ class FD650B {
   void showHex(uint16_t value);                // last 3 hex digits
   void showText(const char* text);             // up to 3 chars
 
+  // Smooth horizontal scrolling for text longer than 3 chars. Each 7-seg
+  // cell is treated as 3 columns (left verticals / horizontals / right
+  // verticals), so the window slides in 1/3-character steps. Non-blocking:
+  // call scrollTick() from loop() until isScrolling() is false. Text up to
+  // 3 chars is shown statically instead. Any setDigit/show* stops it.
+  void scrollText(const char* text, uint32_t stepMs = 40);
+  bool scrollTick();        // advance scroll frame when due; true while scrolling
+  bool isScrolling() const { return _scrolling; }
+
   uint8_t readKeyRaw();    // 0x2E = no key; pressed codes 0x44..0x7F
   bool ping();             // true if chip ACKs both bytes of the mode command
 
@@ -41,8 +50,15 @@ class FD650B {
   void stop();
   bool writeByte(uint8_t b);   // returns chip ACK (true = line pulled low)
   uint8_t readByte();
+  void rawSetDigit(uint8_t index, uint8_t segs);  // like setDigit but keeps scrolling
   static uint8_t segCode(uint8_t n);
   static uint8_t charToSeg(char c);
 
   uint8_t _dio, _clk;
+  bool _scrolling = false;
+  uint8_t _canvas[90];         // scroll canvas: 3 columns per char + padding
+  int _canvasLen = 0;
+  int _scrollPos = 0;
+  uint32_t _scrollNext = 0;
+  uint32_t _scrollStepMs = 40;
 };
